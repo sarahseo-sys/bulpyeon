@@ -121,6 +121,8 @@
   .save:active{transform:translate(3px,3px); box-shadow:1px 1px 0 var(--pink)}
   .note{margin:10px 0 0; font-size:12.5px; color:var(--muted)}
 
+  #party-nudge{border:3px dashed var(--cyan); padding:12px; margin:0 0 14px; background:rgba(0,0,0,.35)}
+  #party-nudge p{margin:0 0 10px; font-size:14px}
   .io{display:grid; grid-template-columns:1fr 1fr; gap:8px}
   .io button{font-family:var(--px); font-size:13px; padding:10px 4px; border:3px solid #fff; background:#000; cursor:pointer}
 
@@ -142,6 +144,14 @@
     <h1>이 집, 다시 시켜도 될까?</h1>
     <p class="sub">가게 이름을 치면 내가 남긴 전투 기록으로 위험도를 바로 보여줘요.</p>
   </header>
+
+  <div id="party-nudge" hidden>
+    <p>👥 지인과 기록을 함께 보려면 파티에 접속하세요</p>
+    <div class="io">
+      <button type="button" id="nudge-join">🔗 파티 접속하기</button>
+      <button type="button" id="nudge-solo">혼자 쓸게요</button>
+    </div>
+  </div>
 
   <div class="search">
     <span class="ico" aria-hidden="true">▶</span>
@@ -251,6 +261,7 @@
   var TASTE = {5:['😍','최고'],4:['😋','맛있음'],3:['😐','보통'],2:['😕','별로'],1:['🤮','최악']};
   var KEY = 'reorder-guard-v1', SAMPLE_KEY = 'reorder-guard-samples', PARTY_KEY = 'reorder-quest-party';
   var SB_URL = 'https://iahddmankmsgablwagmm.supabase.co';
+  var SOLO_KEY = 'reorder-quest-solo', NOTE_KEY = 'reorder-quest-localnote';
   var SB_KEY = 'sb_publishable_Tb1G4FBiLT0KwbrEfJ4qXw_ZwtvY_wi';
 
   var $ = function(id){return document.getElementById(id);};
@@ -691,6 +702,12 @@
     var saved=null; ALL.forEach(function(s){ if(!s.sample && norm(s.name)===norm(rec.name)) saved=s; });
     renderVerdict(saved || ALL[0]); resetForm(); window.scrollTo({top:0,behavior:'smooth'});
     showToast(wasEdit ? '✏️ 수정 완료!' : (first && !showSamples ? '💾 첫 세이브 완료! 예시 가게는 숨겼어요' : '💾 세이브 완료!'));
+    try{
+      if(!party && localStorage.getItem(SOLO_KEY)!=='1' && !localStorage.getItem(NOTE_KEY)){
+        localStorage.setItem(NOTE_KEY,'1');
+        setTimeout(function(){ showToast('📱 이 폰에만 저장됐어요. 지인과 함께 보려면 파티에 접속하세요'); }, 2800);
+      }
+    }catch(err){}
   });
 
   /* 세이브 파일 */
@@ -753,6 +770,8 @@
   function renderParty(){
     $('party-off').hidden = !!party; $('party-on').hidden = !party;
     $('p-room-box').hidden = !!inviteRoom; $('p-invite-note').hidden = !inviteRoom;
+    var solo = false; try{ solo = localStorage.getItem(SOLO_KEY)==='1'; }catch(e){}
+    $('party-nudge').hidden = !!party || !!inviteRoom || solo;
     $('save-note').textContent = (party ? '기록은 이 폰과 파티에 저장돼요. ' : '기록은 이 폰(브라우저)에 저장돼요. ') + '같은 가게를 다시 세이브하면 먹은날이 쌓이고, 같은 메뉴는 새 평가로 바뀌어요. 띄어쓰기가 달라도 같은 가게로 묶어요.';
     if(party) setStatus('🟢 '+party.nick+' 님으로 접속 중');
   }
@@ -825,6 +844,14 @@
     }, function(){ showToast('이 브라우저에서는 파티 접속을 쓸 수 없어요'); });
   });
   $('p-sync').addEventListener('click',function(){ pull(true); });
+  $('nudge-join').addEventListener('click',function(){
+    $('party').scrollIntoView({behavior:'smooth'});
+    (inviteRoom || $('p-room-box').hidden ? $('p-nick') : $('p-room')).focus({preventScroll:true});
+  });
+  $('nudge-solo').addEventListener('click',function(){
+    try{ localStorage.setItem(SOLO_KEY,'1'); }catch(e){}
+    $('party-nudge').hidden = true; showToast('언제든 아래 파티 칸에서 접속할 수 있어요');
+  });
   $('p-invite').addEventListener('click',function(){
     if(!party) return;
     var link = location.origin + location.pathname + '#room=' + party.room;
