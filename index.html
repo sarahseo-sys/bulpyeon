@@ -137,6 +137,16 @@
   .v1{--vc:var(--c1)} .v2{--vc:var(--c2)} .v3{--vc:var(--c3)} .v4{--vc:var(--c4)} .v5{--vc:var(--c5)}
   @media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
   @media (max-width:360px){h1{font-size:20px}.mon{width:72px;height:72px;font-size:48px}.nm{font-size:18px}}
+
+  /* contact */
+  #contactForm textarea{display:block;width:100%;min-height:120px;resize:vertical;font-family:var(--tx);font-size:16px;background:#000;color:#fff;border:2px solid #5A52A8;border-radius:0;padding:11px 12px;box-sizing:border-box;outline:none}
+  #contactForm textarea:focus{border-color:var(--cyan)}
+  #contactForm textarea::placeholder{color:var(--muted)}
+  #contact-status{min-height:20px}
+  #contact-status.ok{color:var(--c1)}
+  #contact-status.err{color:var(--red)}
+  #contactForm .hp{position:absolute;left:-9999px;height:0;overflow:hidden}
+  #contactForm .save:disabled{opacity:.6;cursor:default}
 </style>
 </head>
 <body>
@@ -234,6 +244,25 @@
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>
     </details>
+  </section>
+
+  <section id="contact">
+    <h2>✉️ 문의 보내기</h2>
+    <form id="contactForm" autocomplete="off" novalidate>
+      <label class="lbl first" for="c-name">이름</label>
+      <input id="c-name" name="name" type="text" maxlength="100" placeholder="이름 또는 닉네임">
+
+      <label class="lbl" for="c-email">이메일</label>
+      <input id="c-email" name="email" type="text" inputmode="email" maxlength="200" placeholder="답변 받을 이메일">
+
+      <label class="lbl" for="c-message">문의 내용</label>
+      <textarea id="c-message" name="message" maxlength="2000" placeholder="궁금한 점이나 제안을 남겨주세요"></textarea>
+
+      <div class="hp" aria-hidden="true"><label for="c-website">웹사이트</label><input id="c-website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+
+      <button class="save" type="submit" id="contact-send">✉️ 문의 보내기</button>
+      <p class="note" id="contact-status" role="status" aria-live="polite">보낸 문의는 서버에 저장돼요. 비밀번호 같은 개인정보는 적지 마세요.</p>
+    </form>
   </section>
 
   <footer>“예시” 표시가 붙은 가게는 화면 구경용 예시 값이에요. 사진 첨부는 나중에 연결돼요.</footer>
@@ -863,6 +892,29 @@
   refresh(); resetForm(); showCurrent();
   if(party) pull(false);
   if(inviteRoom){ $('party').scrollIntoView(); $('p-nick').focus({preventScroll:true}); }
+})();
+</script>
+
+<script>
+(function(){
+  var BASE="https://iahddmankmsgablwagmm.supabase.co", KEY="sb_publishable_Tb1G4FBiLT0KwbrEfJ4qXw_ZwtvY_wi";
+  var f=document.getElementById("contactForm"), btn=document.getElementById("contact-send"), st=document.getElementById("contact-status");
+  function show(t,k){st.textContent=t;st.className="note"+(k?" "+k:"");}
+  f.addEventListener("submit",async function(e){
+    e.preventDefault();
+    if(f.website.value){show("문의가 접수됐어요. 고마워요!","ok");f.reset();return;}
+    var name=f.name.value.trim(), email=f.email.value.trim(), message=f.message.value.trim();
+    if(!name) return show("이름을 입력해주세요.","err");
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show("이메일 주소를 확인해주세요.","err");
+    if(!message) return show("문의 내용을 입력해주세요.","err");
+    btn.disabled=true; show("보내는 중…");
+    try{
+      var res=await fetch(BASE+"/rest/v1/contact_messages",{method:"POST",headers:{"apikey":KEY,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({name:name,email:email,message:message})});
+      if(!res.ok) throw new Error("HTTP "+res.status);
+      f.reset(); show("문의가 접수됐어요. 고마워요!","ok");
+    }catch(err){ show("전송에 실패했어요. 잠시 후 다시 시도해주세요.","err"); }
+    finally{ btn.disabled=false; }
+  });
 })();
 </script>
 </body>
