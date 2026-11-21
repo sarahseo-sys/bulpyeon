@@ -191,18 +191,23 @@
     <h2>👥 파티 (지인과 공유)</h2>
     <div id="party-off">
       <p class="note" style="margin:0 0 4px">같은 방 비밀번호를 쓰는 지인끼리 기록을 함께 봐요. 비밀번호를 다르게 치면 다른 방이 만들어지니 똑같이 입력해 주세요.</p>
-      <label class="lbl" for="p-room">방 비밀번호 (8자 이상)</label>
-      <input id="p-room" type="password" autocomplete="off" placeholder="지인과 같은 비밀번호">
+      <p class="note" id="p-invite-note" style="margin:0 0 4px" hidden>🎉 초대 링크로 들어왔어요. 닉네임만 정하면 바로 접속돼요.</p>
+      <div id="p-room-box">
+        <label class="lbl" for="p-room">방 비밀번호 (8자 이상)</label>
+        <input id="p-room" type="password" autocomplete="off" placeholder="지인과 같은 비밀번호">
+      </div>
       <label class="lbl" for="p-nick">내 닉네임 (지인과 겹치면 안 돼요)</label>
       <input id="p-nick" type="text" maxlength="12" autocomplete="off" placeholder="예) 유선">
       <button class="save" type="button" id="p-join">🔗 파티 접속</button>
     </div>
     <div id="party-on" hidden>
       <p class="note" id="p-status" style="margin:0 0 10px"></p>
+      <button type="button" class="save" id="p-invite" style="margin:0 0 10px; font-size:14px; padding:10px">🔗 초대 링크 보내기</button>
       <div class="io">
         <button type="button" id="p-sync">🔄 새로고침</button>
         <button type="button" id="p-leave">🚪 나가기</button>
       </div>
+      <p class="note">초대 링크는 방 열쇠가 들어 있어서, 링크를 받은 사람은 누구나 이 파티에 들어올 수 있어요. 지인에게만 개별로 보내 주세요.</p>
       <p class="note">내 기록은 저장할 때마다 파티에도 올라가요. 지인 기록은 읽기만 되고, 같은 가게면 내 기록 아래에 지인 점수가 보여요. 나가도 이 폰의 기록은 그대로 남아요.</p>
     </div>
   </section>
@@ -735,8 +740,19 @@
     });
   }
   function setStatus(t){ $('p-status').textContent = t; }
+  /* 초대 링크: #room=<방 열쇠> — # 뒤는 서버로 전송되지 않고, 읽은 뒤 주소창에서 지움 */
+  var inviteRoom = null;
+  (function(){
+    var m = /^#room=([0-9a-f]{64})$/.exec(location.hash || ''); if(!m) return;
+    try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+    if(party && party.room === m[1]) return;
+    if(party && !confirm('이미 다른 파티에 접속 중이에요. 초대받은 파티로 바꿀까요?\n(이 폰의 기록은 그대로 남아요)')) return;
+    party = null; friendRows = []; try{ localStorage.removeItem(PARTY_KEY); }catch(e){}
+    inviteRoom = m[1];
+  })();
   function renderParty(){
     $('party-off').hidden = !!party; $('party-on').hidden = !party;
+    $('p-room-box').hidden = !!inviteRoom; $('p-invite-note').hidden = !inviteRoom;
     $('save-note').textContent = (party ? '기록은 이 폰과 파티에 저장돼요. ' : '기록은 이 폰(브라우저)에 저장돼요. ') + '같은 가게를 다시 세이브하면 먹은날이 쌓이고, 같은 메뉴는 새 평가로 바뀌어요. 띄어쓰기가 달라도 같은 가게로 묶어요.';
     if(party) setStatus('🟢 '+party.nick+' 님으로 접속 중');
   }
@@ -794,21 +810,30 @@
   }
   $('p-join').addEventListener('click',function(){
     var room = $('p-room').value, nick = $('p-nick').value.trim();
-    if(room.length < 8){ showToast('방 비밀번호는 8자 이상이어야 해요'); return; }
+    if(!inviteRoom && room.length < 8){ showToast('방 비밀번호는 8자 이상이어야 해요'); return; }
     if(!nick){ showToast('닉네임을 적어 주세요'); return; }
-    sha256(room).then(function(h){
+    (inviteRoom ? Promise.resolve(inviteRoom) : sha256(room)).then(function(h){
       var cand = {room:h, nick:nick};
       party = cand;
       return api('reorder_records?select=store_norm,record&author=eq.'+encodeURIComponent(nick)+'&limit=50').then(function(rows){
         var n = (rows||[]).filter(function(r){ return !(r.record && r.record.deleted); }).length;
         if(n && !confirm('이 방에 “'+nick+'” 닉네임으로 저장된 기록이 '+n+'곳 있어요.\n\n내 다른 기기에서 쓰던 닉네임이면 [확인], 지인이 쓰는 닉네임이면 [취소]를 누르고 다른 닉네임을 써 주세요. (겹치면 서로 덮어써요)')){ party = null; return; }
         try{ localStorage.setItem(PARTY_KEY, JSON.stringify(cand)); }catch(e){}
-        $('p-room').value = ''; renderParty();
+        $('p-room').value = ''; inviteRoom = null; renderParty();
         return pull(true);
       }).catch(function(){ party = null; renderParty(); showToast('파티에 연결하지 못했어요. 잠시 후 다시 시도해 주세요'); });
     }, function(){ showToast('이 브라우저에서는 파티 접속을 쓸 수 없어요'); });
   });
   $('p-sync').addEventListener('click',function(){ pull(true); });
+  $('p-invite').addEventListener('click',function(){
+    if(!party) return;
+    var link = location.origin + location.pathname + '#room=' + party.room;
+    if(navigator.share){
+      navigator.share({title:'재주문 방지 노트 초대', text:'같은 파티에서 기록을 함께 봐요. 링크를 열고 닉네임만 정하면 돼요.', url:link}).catch(function(){});
+    } else if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(function(){ showToast('🔗 초대 링크를 복사했어요. 지인에게 붙여 넣어 보내 주세요'); }, function(){ window.prompt('이 링크를 복사해서 지인에게 보내 주세요', link); });
+    } else { window.prompt('이 링크를 복사해서 지인에게 보내 주세요', link); }
+  });
   $('p-leave').addEventListener('click',function(){
     if(!confirm('파티에서 나갈까요? 이 폰의 기록은 그대로 남아요.')) return;
     party = null; friendRows = [];
@@ -821,6 +846,7 @@
   renderParty();
   refresh(); resetForm(); showCurrent();
   if(party) pull(false);
+  if(inviteRoom){ $('party').scrollIntoView(); $('p-nick').focus({preventScroll:true}); }
 })();
 </script>
 </body>
