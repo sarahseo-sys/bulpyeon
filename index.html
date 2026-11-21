@@ -247,7 +247,9 @@
   </section>
 
   <section id="contact">
-    <h2>✉️ 문의 보내기</h2>
+    <details class="fold" id="contact-fold" style="margin-top:0">
+    <summary>✉️ 문의하기</summary>
+    <div class="body" style="padding-top:6px">
     <form id="contactForm" autocomplete="off" novalidate>
       <label class="lbl first" for="c-name">이름</label>
       <input id="c-name" name="name" type="text" maxlength="100" placeholder="이름 또는 닉네임">
@@ -263,6 +265,8 @@
       <button class="save" type="submit" id="contact-send">✉️ 문의 보내기</button>
       <p class="note" id="contact-status" role="status" aria-live="polite">보낸 문의는 서버에 저장돼요. 비밀번호 같은 개인정보는 적지 마세요.</p>
     </form>
+    </div>
+    </details>
   </section>
 
   <footer>“예시” 표시가 붙은 가게는 화면 구경용 예시 값이에요. 사진 첨부는 나중에 연결돼요.</footer>
@@ -898,6 +902,9 @@
 <script>
 (function(){
   var BASE="https://iahddmankmsgablwagmm.supabase.co", KEY="sb_publishable_Tb1G4FBiLT0KwbrEfJ4qXw_ZwtvY_wi";
+  var cf=document.getElementById("contact-fold");
+  function openContact(){ if(location.hash==="#contact" && cf) cf.open=true; }
+  openContact(); window.addEventListener("hashchange",openContact);
   var f=document.getElementById("contactForm"), btn=document.getElementById("contact-send"), st=document.getElementById("contact-status");
   function show(t,k){st.textContent=t;st.className="note"+(k?" "+k:"");}
   f.addEventListener("submit",async function(e){
