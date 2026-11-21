@@ -99,9 +99,9 @@
   .editbar button{font-family:var(--px); font-size:12px; border:2px solid #000; background:#fff; color:#000; padding:3px 8px; cursor:pointer}
   .lbl{display:block; font-family:var(--px); font-size:13px; color:var(--yellow); margin:14px 0 6px}
   .lbl.first{margin-top:0}
-  input[type=text],input[type=date]{width:100%; font-family:var(--tx); font-size:16px; padding:11px 12px; border:3px solid #fff; background:#000; color:#fff; border-radius:0; -webkit-appearance:none}
+  input[type=text],input[type=password],input[type=date]{width:100%; font-family:var(--tx); font-size:16px; padding:11px 12px; border:3px solid #fff; background:#000; color:#fff; border-radius:0; -webkit-appearance:none}
   input[type=date]{color-scheme:dark}
-  input[type=text]:focus,input[type=date]:focus{outline:none; border-color:var(--yellow)}
+  input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{outline:none; border-color:var(--yellow)}
   input::placeholder{color:#7c7c7c}
   .dates{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px}
   .dchip{font-family:var(--px); font-size:12px; border:2px solid var(--muted); background:#000; padding:3px 4px 3px 8px; display:inline-flex; align-items:center; gap:4px}
@@ -183,8 +183,28 @@
       <div class="preview" id="preview">메뉴 맛을 고르면 평균 점수와 위험도가 자동으로 나와요</div>
 
       <button class="save" type="submit" id="save-btn">💾 세이브</button>
-      <p class="note">기록은 이 폰(브라우저)에만 저장돼요. 같은 가게를 다시 세이브하면 먹은날이 쌓이고, 같은 메뉴는 새 평가로 바뀌어요. 띄어쓰기가 달라도 같은 가게로 묶어요.</p>
+      <p class="note" id="save-note">기록은 이 폰(브라우저)에 저장돼요. 같은 가게를 다시 세이브하면 먹은날이 쌓이고, 같은 메뉴는 새 평가로 바뀌어요. 띄어쓰기가 달라도 같은 가게로 묶어요.</p>
     </form>
+  </section>
+
+  <section id="party">
+    <h2>👥 파티 (지인과 공유)</h2>
+    <div id="party-off">
+      <p class="note" style="margin:0 0 4px">같은 방 비밀번호를 쓰는 지인끼리 기록을 함께 봐요. 비밀번호를 다르게 치면 다른 방이 만들어지니 똑같이 입력해 주세요.</p>
+      <label class="lbl" for="p-room">방 비밀번호 (8자 이상)</label>
+      <input id="p-room" type="password" autocomplete="off" placeholder="지인과 같은 비밀번호">
+      <label class="lbl" for="p-nick">내 닉네임 (지인과 겹치면 안 돼요)</label>
+      <input id="p-nick" type="text" maxlength="12" autocomplete="off" placeholder="예) 유선">
+      <button class="save" type="button" id="p-join">🔗 파티 접속</button>
+    </div>
+    <div id="party-on" hidden>
+      <p class="note" id="p-status" style="margin:0 0 10px"></p>
+      <div class="io">
+        <button type="button" id="p-sync">🔄 새로고침</button>
+        <button type="button" id="p-leave">🚪 나가기</button>
+      </div>
+      <p class="note">내 기록은 저장할 때마다 파티에도 올라가요. 지인 기록은 읽기만 되고, 같은 가게면 내 기록 아래에 지인 점수가 보여요. 나가도 이 폰의 기록은 그대로 남아요.</p>
+    </div>
   </section>
 
   <section>
@@ -197,7 +217,7 @@
     <p class="note">다른 폰으로 옮기거나 지인에게 기록을 보낼 때 써요. 불러오면 같은 가게는 파일 내용으로 바뀌고, 나머지는 그대로 남아요.</p>
   </section>
 
-  <footer>“예시” 표시가 붙은 가게는 화면 구경용 예시 값이에요. 지인 기록 공유와 사진 첨부는 나중에 연결돼요.</footer>
+  <footer>“예시” 표시가 붙은 가게는 화면 구경용 예시 값이에요. 사진 첨부는 나중에 연결돼요.</footer>
 </main>
 
 <datalist id="dl-stores"></datalist>
@@ -220,7 +240,9 @@
     boss: ['🏃 도망친다','⚔️ 그래도 시킨다',0]
   };
   var TASTE = {5:['😍','최고'],4:['😋','맛있음'],3:['😐','보통'],2:['😕','별로'],1:['🤮','최악']};
-  var KEY = 'reorder-guard-v1', SAMPLE_KEY = 'reorder-guard-samples';
+  var KEY = 'reorder-guard-v1', SAMPLE_KEY = 'reorder-guard-samples', PARTY_KEY = 'reorder-quest-party';
+  var SB_URL = 'https://iahddmankmsgablwagmm.supabase.co';
+  var SB_KEY = 'sb_publishable_Tb1G4FBiLT0KwbrEfJ4qXw_ZwtvY_wi';
 
   var $ = function(id){return document.getElementById(id);};
   function el(tag, cls, text){var e=document.createElement(tag); if(cls) e.className=cls; if(text!==undefined) e.textContent=text; return e;}
@@ -265,6 +287,8 @@
   function load(){ try{ return clean(JSON.parse(localStorage.getItem(KEY) || '[]')); }catch(e){ return []; } }
   function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(stored)); return true; }catch(e){ return false; } }
   var stored = load();
+  var party = null, friendRows = [];
+  try{ var pj = JSON.parse(localStorage.getItem(PARTY_KEY) || 'null'); if(pj && pj.room && pj.nick) party = {room:String(pj.room), nick:String(pj.nick)}; }catch(e){}
   function findStored(name){ var k=norm(name); for(var i=0;i<stored.length;i++){ if(norm(stored[i].name)===k) return stored[i]; } return null; }
 
   /* 예시 보기: 기록이 없으면 켜짐, 첫 기록 후 자동으로 꺼짐. 직접 바꾸면 그 선택을 기억 */
@@ -308,7 +332,24 @@
   }
   var ALL = [];
   function buildAll(){
-    var real = stored.map(function(r){return toView(r,false);}).sort(function(a,b){return b.savedAt-a.savedAt;});
+    var fg = {};
+    friendRows.forEach(function(fr){ (fg[fr.k] = fg[fr.k] || []).push(fr); });
+    function avgOf(rec){ return rec.menus.reduce(function(a,x){return a+x.t;},0)/rec.menus.length; }
+    function friendsOf(k){ return (fg[k]||[]).map(function(fr){ return {n:fr.author, t:avgOf(fr.rec)}; }); }
+    var mine = {};
+    var real = stored.map(function(r){ mine[norm(r.name)] = 1; var v = toView(r,false); v.friends = friendsOf(norm(r.name)); return v; })
+                     .sort(function(a,b){return b.savedAt-a.savedAt;});
+    var only = Object.keys(fg).filter(function(k){return !mine[k];}).map(function(k){
+      var g = fg[k], dates = [], menus = [], who = [], at = 0;
+      g.forEach(function(fr){
+        fr.rec.dates.forEach(function(d){ if(dates.indexOf(d)<0) dates.push(d); });
+        fr.rec.menus.forEach(function(x){ var o = {m:x.m,t:x.t,c:x.c,by:fr.author}; if(x.d) o.d=x.d; if(x.pt) o.pt=x.pt; menus.push(o); });
+        who.push(fr.author); at = Math.max(at, fr.rec.savedAt||0);
+      });
+      var v = toView({name:g[0].rec.name, who:'', dates:dates, menus:menus, savedAt:at}, false);
+      v.friends = friendsOf(k); v.shared = true; v.sharedBy = who; return v;
+    }).sort(function(a,b){return b.savedAt-a.savedAt;});
+    real = real.concat(only);
     var sam = [];
     if(showSamples){
       sam = SAMPLE_RAW.filter(function(r){ return !findStored(r.name); })
@@ -332,7 +373,7 @@
     var bt = el('div','bt');
     bt.appendChild(el('div','mon',lv.face));
     var info = el('div');
-    var nm = el('p','nm',s.name+' '); if(s.sample) nm.appendChild(el('span','tag-s','예시'));
+    var nm = el('p','nm',s.name+' '); if(s.sample) nm.appendChild(el('span','tag-s','예시')); else if(s.shared) nm.appendChild(el('span','tag-s','지인 기록'));
     info.appendChild(nm);
     info.appendChild(el('div','lv','위험도 LV.'+rk+' · '+lv.lv));
     bt.appendChild(info); box.appendChild(bt);
@@ -351,7 +392,7 @@
     s.menus.slice().sort(function(a,b){return a.t-b.t;}).forEach(function(x){
       var r = el('div','mrec');
       r.appendChild(el('div','mn',TASTE[x.t][0]+' '+x.m+' · '+x.t+'점'));
-      var d = []; if(x.d) d.push(shortDate(x.d)+' 평가'); if(x.pt) d.push('이전 '+x.pt+'점 → '+x.t+'점');
+      var d = []; if(x.d) d.push(shortDate(x.d)+' 평가'); if(x.pt) d.push('이전 '+x.pt+'점 → '+x.t+'점'); if(x.by) d.push(x.by+'님');
       if(d.length) r.appendChild(el('div','md',d.join(' · ')));
       if(x.c) r.appendChild(el('div','mc',x.c));
       body.appendChild(r);
@@ -370,7 +411,15 @@
       var ft = '👥 지인 기록: ';
       if(s.friends.length){ var fa=s.friends.reduce(function(a,f){return a+f.t;},0)/s.friends.length; ft += s.friends.length+'명 평균 '+fa.toFixed(1)+'점 '; }
       else ft += '아직 없음 ';
-      var fr = el('div','friends',ft); fr.appendChild(el('span','tag','🔌 나중에 연결')); box.appendChild(fr);
+      var fr = el('div','friends',ft); fr.appendChild(el('span','tag','예시 값')); box.appendChild(fr);
+    }
+
+    if(!s.sample && party){
+      var fl = el('div','friends');
+      if(s.shared) fl.textContent = '👥 내 기록은 없어요 · '+s.sharedBy.join(', ')+'님의 기록이에요';
+      else if(s.friends.length) fl.textContent = '👥 지인 기록: '+s.friends.map(function(f){ return f.n+' '+TASTE[Math.round(f.t)][0]+' '+f.t.toFixed(1)+'점'; }).join(' · ');
+      else fl.textContent = '👥 지인 기록: 아직 없음';
+      box.appendChild(fl);
     }
 
     var c = CMD[lv.role], cmd = el('div','cmd');
@@ -385,7 +434,7 @@
     b2.addEventListener('click',function(){ cancelEdit(); goWrite(s.name); });
     cmd.appendChild(b1); cmd.appendChild(b2); box.appendChild(cmd);
 
-    if(!s.sample){
+    if(!s.sample && !s.shared){
       var tools = el('div','tools');
       var eb = el('button',null,'✏️ 수정'); eb.type='button';
       eb.addEventListener('click',function(){ startEdit(s.name); });
@@ -394,7 +443,7 @@
         if(!confirm('“'+s.name+'” 기록을 삭제할까요?')) return;
         stored = stored.filter(function(r){return norm(r.name)!==norm(s.name);});
         if(editing && norm(editing)===norm(s.name)) cancelEdit();
-        persist(); refresh(); current=null; showCurrent(); showToast('삭제했어요');
+        persist(); remoteDelete(s.name); refresh(); current=null; showCurrent(); showToast('삭제했어요');
       });
       tools.appendChild(eb); tools.appendChild(del); box.appendChild(tools);
     }
@@ -442,7 +491,7 @@
       var rk = risk(s.taste), lv = LEVELS[rk];
       var b = el('button','item v'+rk+(current && keyOf(current)===keyOf(s)?' sel':'')); b.type='button';
       b.appendChild(el('span','e',lv.face));
-      var t = el('span','t'); var n = el('div','n',s.name+' '); if(s.sample) n.appendChild(el('span','tag-s','예시'));
+      var t = el('span','t'); var n = el('div','n',s.name+' '); if(s.sample) n.appendChild(el('span','tag-s','예시')); else if(s.shared) n.appendChild(el('span','tag-s','지인'));
       t.appendChild(n); t.appendChild(el('div','m',agoText(s.agos[0])+' · '+menuSummary(s))); b.appendChild(t);
       var r = el('span','r'); var mini = el('span','mini'); var mi = el('i'); mi.style.width = Math.max(6, s.taste/5*100)+'%'; mini.appendChild(mi);
       r.appendChild(mini); r.appendChild(el('span','sc',s.taste.toFixed(1)+' · '+lv.name)); b.appendChild(r);
@@ -626,6 +675,8 @@
     var first = stored.length===1;
     if(!persist()){ showToast('세이브 실패! 브라우저 저장 공간을 확인해 주세요'); return; }
     var wasEdit = !!editing;
+    if(wasEdit && norm(editing)!==norm(rec.name)) remoteDelete(editing);
+    remoteSave([rec]);
     try{ if(first && !localStorage.getItem(SAMPLE_KEY)) setSamples(false, false); }catch(err){}
     refresh(); $('q').value=''; current=null;
     var saved=null; ALL.forEach(function(s){ if(!s.sample && norm(s.name)===norm(rec.name)) saved=s; });
@@ -656,13 +707,100 @@
         if(i>-1) stored[i]=nr; else stored.push(nr);
       });
       if(!persist()){ showToast('불러오기 실패! 저장 공간을 확인해 주세요'); return; }
+      remoteSave(recs);
       cancelEdit(); refresh(); current=null; showCurrent(); showToast('⬆️ '+recs.length+'곳 불러왔어요');
     };
     rd.readAsText(f);
   });
 
+  /* 파티 (Supabase) — 방 비밀번호는 SHA-256으로 바꿔 x-room-key 헤더로만 보냄 */
+  function sha256(str){
+    var c = window.crypto && window.crypto.subtle;
+    if(!c) return Promise.reject(new Error('nocrypto'));
+    return c.digest('SHA-256', new TextEncoder().encode('reorder-quest:'+str)).then(function(b){
+      return Array.prototype.map.call(new Uint8Array(b),function(x){return ('0'+x.toString(16)).slice(-2);}).join('');
+    });
+  }
+  function api(path, opt){
+    opt = opt || {};
+    var h = {apikey:SB_KEY, 'x-room-key':party.room, 'Content-Type':'application/json'};
+    if(opt.prefer) h.Prefer = opt.prefer;
+    return fetch(SB_URL+'/rest/v1/'+path, {method:opt.method||'GET', headers:h, body:opt.body}).then(function(r){
+      if(!r.ok) throw new Error('http '+r.status);
+      return r.text().then(function(t){ return t ? JSON.parse(t) : null; });
+    });
+  }
+  function setStatus(t){ $('p-status').textContent = t; }
+  function renderParty(){
+    $('party-off').hidden = !!party; $('party-on').hidden = !party;
+    $('save-note').textContent = (party ? '기록은 이 폰과 파티에 저장돼요. ' : '기록은 이 폰(브라우저)에 저장돼요. ') + '같은 가게를 다시 세이브하면 먹은날이 쌓이고, 같은 메뉴는 새 평가로 바뀌어요. 띄어쓰기가 달라도 같은 가게로 묶어요.';
+    if(party) setStatus('🟢 '+party.nick+' 님으로 접속 중');
+  }
+  function remoteSave(recs){
+    if(!party || !recs.length) return Promise.resolve();
+    var rows = recs.map(function(r){ return {room_key:party.room, author:party.nick, store_norm:norm(r.name), record:r, updated_at:new Date(r.savedAt||Date.now()).toISOString()}; });
+    return api('reorder_records?on_conflict=room_key,author,store_norm', {method:'POST', prefer:'resolution=merge-duplicates,return=minimal', body:JSON.stringify(rows)})
+      .catch(function(){ showToast('⚠️ 파티 저장 실패 — 이 폰에는 저장됐어요'); });
+  }
+  function remoteDelete(name){
+    if(!party) return Promise.resolve();
+    return api('reorder_records?author=eq.'+encodeURIComponent(party.nick)+'&store_norm=eq.'+encodeURIComponent(norm(name)), {method:'DELETE', prefer:'return=minimal'})
+      .catch(function(){ showToast('⚠️ 파티에서 삭제하지 못했어요'); });
+  }
+  function pull(announce){
+    if(!party) return Promise.resolve();
+    setStatus('🔄 동기화 중…');
+    return api('reorder_records?select=author,store_norm,record,updated_at&order=updated_at.desc&limit=1000').then(function(rows){
+      rows = Array.isArray(rows) ? rows : [];
+      var remoteMine = {}, others = [], authors = {}, changed = false;
+      rows.forEach(function(row){
+        var rec = clean([row.record])[0]; if(!rec) return;
+        var k = norm(rec.name);
+        if(row.author === party.nick){
+          remoteMine[k] = rec;
+          var i = -1; stored.forEach(function(r,j){ if(norm(r.name)===k) i=j; });
+          if(i<0){ stored.push(rec); changed = true; }
+          else if((rec.savedAt||0) > (stored[i].savedAt||0)){ stored[i] = rec; changed = true; }
+        } else { others.push({author:row.author, k:k, rec:rec}); authors[row.author] = 1; }
+      });
+      friendRows = others;
+      if(changed) persist();
+      var up = stored.filter(function(r){ var m = remoteMine[norm(r.name)]; return !m || (r.savedAt||0) > (m.savedAt||0); });
+      if(others.length){ try{ if(!localStorage.getItem(SAMPLE_KEY)) setSamples(false,false); }catch(e){} }
+      refresh(); current = findCurrent();
+      if($('q').value.trim()) onSearch(); else showCurrent();
+      setStatus('🟢 '+party.nick+' 님으로 접속 중 · 지인 '+Object.keys(authors).length+'명의 기록이 보여요');
+      if(announce) showToast('🔄 파티와 동기화했어요');
+      return remoteSave(up);
+    }).catch(function(){
+      setStatus('🔴 파티에 연결하지 못했어요. 이 폰의 기록은 그대로예요');
+      if(announce) showToast('파티 연결 실패 — 인터넷을 확인해 주세요');
+    });
+  }
+  $('p-join').addEventListener('click',function(){
+    var room = $('p-room').value, nick = $('p-nick').value.trim();
+    if(room.length < 8){ showToast('방 비밀번호는 8자 이상이어야 해요'); return; }
+    if(!nick){ showToast('닉네임을 적어 주세요'); return; }
+    sha256(room).then(function(h){
+      party = {room:h, nick:nick};
+      try{ localStorage.setItem(PARTY_KEY, JSON.stringify(party)); }catch(e){}
+      $('p-room').value = ''; renderParty();
+      return pull(true);
+    }).catch(function(){ showToast('이 브라우저에서는 파티 접속을 쓸 수 없어요'); });
+  });
+  $('p-sync').addEventListener('click',function(){ pull(true); });
+  $('p-leave').addEventListener('click',function(){
+    if(!confirm('파티에서 나갈까요? 이 폰의 기록은 그대로 남아요.')) return;
+    party = null; friendRows = [];
+    try{ localStorage.removeItem(PARTY_KEY); }catch(e){}
+    renderParty(); refresh(); current = findCurrent(); if($('q').value.trim()) onSearch(); else showCurrent();
+    showToast('파티에서 나왔어요');
+  });
+
   setSamples(showSamples, false);
+  renderParty();
   refresh(); resetForm(); showCurrent();
+  if(party) pull(false);
 })();
 </script>
 </body>
