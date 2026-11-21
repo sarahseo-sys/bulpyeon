@@ -27,7 +27,7 @@
   .tag-s{display:inline-block; font-family:var(--px); font-size:11px; background:var(--muted); color:var(--bg); padding:1px 6px; vertical-align:middle}
 
   /* 검색 */
-  .search{position:relative}
+  .search{position:relative; margin-bottom:14px}
   .search input{width:100%; font-family:var(--px); font-size:17px; padding:13px 14px 13px 38px; border:3px solid #fff; background:#000; color:#fff;
     outline:none; border-radius:0; box-shadow:4px 4px 0 var(--pink); -webkit-appearance:none}
   .search input::placeholder{color:#8a8a8a}
@@ -99,7 +99,7 @@
   .editbar button{font-family:var(--px); font-size:12px; border:2px solid #000; background:#fff; color:#000; padding:3px 8px; cursor:pointer}
   .lbl{display:block; font-family:var(--px); font-size:13px; color:var(--yellow); margin:14px 0 6px}
   .lbl.first{margin-top:0}
-  input[type=text],input[type=password],input[type=date]{width:100%; font-family:var(--tx); font-size:16px; padding:11px 12px; border:3px solid #fff; background:#000; color:#fff; border-radius:0; -webkit-appearance:none}
+  input[type=text],input[type=password],input[type=date]{width:100%; font-family:var(--tx); font-size:16px; padding:11px 12px; border:2px solid #5a52a8; background:#000; color:#fff; border-radius:0; -webkit-appearance:none}
   input[type=date]{color-scheme:dark}
   input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{outline:none; border-color:var(--yellow)}
   input::placeholder{color:#7c7c7c}
@@ -121,8 +121,11 @@
   .save:active{transform:translate(3px,3px); box-shadow:1px 1px 0 var(--pink)}
   .note{margin:10px 0 0; font-size:12.5px; color:var(--muted)}
 
-  #party-nudge{border:3px dashed var(--cyan); padding:12px; margin:0 0 14px; background:rgba(0,0,0,.35)}
-  #party-nudge p{margin:0 0 10px; font-size:14px}
+  #party-nudge{display:flex; align-items:center; gap:8px; flex-wrap:wrap; border:2px dashed var(--muted); padding:7px 10px; margin:0 0 12px}
+  #party-nudge[hidden]{display:none}
+  #party-nudge p{margin:0; flex:1 1 150px; font-size:13px; color:var(--muted)}
+  #party-nudge button{font-family:var(--px); font-size:12px; padding:6px 10px; border:2px solid var(--cyan); background:#000; color:var(--cyan); cursor:pointer}
+  #party-nudge button.quiet{border-color:var(--muted); color:var(--muted)}
   .io{display:grid; grid-template-columns:1fr 1fr; gap:8px}
   .io button{font-family:var(--px); font-size:13px; padding:10px 4px; border:3px solid #fff; background:#000; cursor:pointer}
 
@@ -146,18 +149,15 @@
   </header>
 
   <div id="party-nudge" hidden>
-    <p>👥 지인과 기록을 함께 보려면 파티에 접속하세요</p>
-    <div class="io">
-      <button type="button" id="nudge-join">🔗 파티 접속하기</button>
-      <button type="button" id="nudge-solo">혼자 쓸게요</button>
-    </div>
+    <p>👥 지인과 함께 보기</p>
+    <button type="button" id="nudge-join">파티 접속</button>
+    <button type="button" id="nudge-solo" class="quiet">혼자 쓸게요</button>
   </div>
 
   <div class="search">
     <span class="ico" aria-hidden="true">▶</span>
     <input id="q" type="search" inputmode="search" placeholder="가게 이름 검색" autocomplete="off" list="dl-stores" aria-label="가게 이름 검색">
   </div>
-  <div class="chips" id="chips" aria-label="가게 바로가기"></div>
 
   <div id="verdict" class="card" aria-live="polite"></div>
 
@@ -407,7 +407,7 @@
     box.appendChild(el('div','meta',meta));
 
     var dm = el('details','fold');
-    dm.appendChild(el('summary',null,'🍴 메뉴 '+s.menus.length+'개 보기'));
+    dm.appendChild(el('summary',null,'🍴 메뉴 '+s.menus.length+'개'+(s.dates.length>1 ? ' · 이전 전투 '+(s.dates.length-1)+'회' : '')+' 보기'));
     var body = el('div','body');
     s.menus.slice().sort(function(a,b){return a.t-b.t;}).forEach(function(x){
       var r = el('div','mrec');
@@ -417,15 +417,11 @@
       if(x.c) r.appendChild(el('div','mc',x.c));
       body.appendChild(r);
     });
-    dm.appendChild(body); box.appendChild(dm);
-
     if(s.dates.length>1){
-      var dd = el('details','fold');
-      dd.appendChild(el('summary',null,'▸ 이전 전투 '+(s.dates.length-1)+'회'));
-      var db = el('div','body');
-      s.dates.slice(1).forEach(function(d,i){ db.appendChild(el('div','pi',agoText(s.agos[i+1])+' ('+fmtDate(d)+')')); });
-      dd.appendChild(db); box.appendChild(dd);
+      var ph = el('div','md','▸ 이전 전투 '+(s.dates.length-1)+'회'); ph.style.margin = '10px 0 2px'; body.appendChild(ph);
+      s.dates.slice(1).forEach(function(d,i){ body.appendChild(el('div','pi',agoText(s.agos[i+1])+' ('+fmtDate(d)+')')); });
     }
+    dm.appendChild(body); box.appendChild(dm);
 
     if(s.sample){
       var ft = '👥 지인 기록: ';
@@ -536,13 +532,6 @@
 
   function refresh(){
     buildAll();
-    var chips = $('chips'); chips.innerHTML='';
-    ALL.slice(0,4).forEach(function(s){
-      var b = el('button','chip',LEVELS[risk(s.taste)].face+' '+s.name); b.type='button';
-      b.addEventListener('click',function(){ $('q').value=s.name; onSearch(); });
-      chips.appendChild(b);
-    });
-    chips.hidden = !ALL.length;
     var dl = $('dl-stores'); dl.innerHTML='';
     ALL.forEach(function(s){ var o=el('option'); o.value=s.name; dl.appendChild(o); });
     $('risky').textContent = '👾 보스만 보기 ('+ALL.filter(function(s){return risk(s.taste)>=4;}).length+')';
