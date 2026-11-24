@@ -147,6 +147,36 @@
   #contact-status.err{color:var(--red)}
   #contactForm .hp{position:absolute;left:-9999px;height:0;overflow:hidden}
   #contactForm .save:disabled{opacity:.6;cursor:default}
+
+  /* ===== 날씨 (현재 날씨) ===== */
+  #weather select{width:100%; font-family:var(--tx); font-size:16px; padding:11px 36px 11px 12px; border:2px solid #5a52a8; background:#000; color:#fff; border-radius:0; -webkit-appearance:none; appearance:none; background-image:linear-gradient(45deg,transparent 50%,#fff 50%),linear-gradient(135deg,#fff 50%,transparent 50%); background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%; background-size:5px 5px; background-repeat:no-repeat}
+  #weather select:focus{outline:none; border-color:var(--yellow)}
+  #weather .wx-lbl{display:block; font-family:var(--px); font-size:12px; color:var(--cyan); margin:0 0 4px}
+  #weather .wx-stage{margin-top:12px}
+  #weather .wx-loading{display:flex; align-items:center; justify-content:center; gap:10px; min-height:150px; border:3px solid #fff; background:var(--panel); font-family:var(--px); font-size:13px; color:var(--cyan)}
+  #weather .wx-spin{width:18px; height:18px; border:3px solid #5a52a8; border-top-color:var(--yellow); border-radius:50%; animation:wxspin .8s linear infinite; flex:none}
+  @keyframes wxspin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){ #weather .wx-spin{animation-duration:2.4s} }
+  #weather .wx-card{border:3px solid #fff; background:var(--panel); padding:14px; box-shadow:4px 4px 0 #000}
+  #weather .wx-top{display:flex; align-items:center; justify-content:space-between; gap:10px}
+  #weather .wx-city{font-family:var(--px); font-size:17px; font-weight:700}
+  #weather .wx-desc{color:var(--muted); font-size:14px}
+  #weather .wx-icon{font-size:46px; line-height:1}
+  #weather .wx-temp{font-family:var(--px); font-size:52px; line-height:1.15; margin:10px 0 0; color:var(--yellow); text-shadow:3px 3px 0 var(--pink)}
+  #weather .wx-temp small{font-size:20px; color:var(--muted); text-shadow:none; margin-left:3px}
+  #weather .wx-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px}
+  #weather .wx-stat{background:#000; border:2px solid #5a52a8; padding:8px 10px}
+  #weather .wx-stat .k{font-family:var(--px); font-size:11px; color:var(--cyan)}
+  #weather .wx-stat .v{font-size:18px; font-weight:700; margin-top:2px}
+  #weather .wx-stat .v small{font-size:12px; font-weight:400; color:var(--muted); margin-left:3px}
+  #weather .wx-time{margin-top:10px; font-size:12.5px; color:var(--muted)}
+  #weather .wx-error{border:2px solid var(--red); background:rgba(255,46,99,.12); color:#ffb3c4; padding:10px 12px; font-size:14px; word-break:break-word}
+  #weather .wx-error b{display:block; color:var(--red); font-family:var(--px); font-size:13px; margin-bottom:2px}
+  #weather .wx-error p{margin:0 0 10px}
+  #weather button.wx-retry{font-family:var(--px); font-size:13px; padding:8px 12px; border:2px solid #fff; background:#000; color:#fff; cursor:pointer; border-radius:0}
+  #weather button.wx-retry:hover{border-color:var(--yellow)}
+  #weather .wx-foot{font-size:12.5px; color:var(--muted); margin:10px 0 0}
+  #weather .wx-foot a{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -243,6 +273,18 @@
         </div>
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>
+    </details>
+  </section>
+
+  <section id="weather">
+    <details class="fold" id="weather-fold" style="margin-top:0">
+    <summary>⛅ 날씨 보기 (현재 기온·풍속)</summary>
+    <div class="body" style="padding-top:6px">
+      <label class="wx-lbl" for="wx-city">도시</label>
+      <select id="wx-city" aria-controls="wx-stage"></select>
+      <div class="wx-stage" id="wx-stage" aria-live="polite"></div>
+      <p class="wx-foot">데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · 키 없이 바로 불러와요. 공식 기상청 예보가 아니에요.</p>
+    </div>
     </details>
   </section>
 
@@ -921,6 +963,132 @@
       f.reset(); show("문의가 접수됐어요. 고마워요!","ok");
     }catch(err){ show("전송에 실패했어요. 잠시 후 다시 시도해주세요.","err"); }
     finally{ btn.disabled=false; }
+  });
+})();
+</script>
+
+<script>
+(function(){
+  'use strict';
+  var CITIES = [
+    {name:'서울', lat:37.5665, lon:126.9780}, {name:'부산', lat:35.1796, lon:129.0756},
+    {name:'대구', lat:35.8714, lon:128.6014}, {name:'인천', lat:37.4563, lon:126.7052},
+    {name:'광주', lat:35.1595, lon:126.8526}, {name:'대전', lat:36.3504, lon:127.3845},
+    {name:'울산', lat:35.5384, lon:129.3114}, {name:'세종', lat:36.4800, lon:127.2890},
+    {name:'제주', lat:33.4996, lon:126.5312}
+  ];
+  var WMO = {
+    0:['맑음','☀️','🌙'], 1:['대체로 맑음','🌤','🌙'], 2:['구름 조금','⛅','☁️'], 3:['흐림','☁️','☁️'],
+    45:['안개','🌫','🌫'], 48:['서리 안개','🌫','🌫'],
+    51:['약한 이슬비','🌦','🌧'], 53:['이슬비','🌦','🌧'], 55:['강한 이슬비','🌧','🌧'],
+    56:['어는 이슬비','🌧','🌧'], 57:['강한 어는 이슬비','🌧','🌧'],
+    61:['약한 비','🌧','🌧'], 63:['비','🌧','🌧'], 65:['강한 비','🌧','🌧'],
+    66:['어는 비','🌧','🌧'], 67:['강한 어는 비','🌧','🌧'],
+    71:['약한 눈','🌨','🌨'], 73:['눈','🌨','🌨'], 75:['강한 눈','❄️','❄️'], 77:['싸락눈','🌨','🌨'],
+    80:['약한 소나기','🌦','🌧'], 81:['소나기','🌧','🌧'], 82:['강한 소나기','⛈','⛈'],
+    85:['약한 소낙눈','🌨','🌨'], 86:['강한 소낙눈','❄️','❄️'],
+    95:['뇌우','⛈','⛈'], 96:['우박 동반 뇌우','⛈','⛈'], 99:['강한 우박 동반 뇌우','⛈','⛈']
+  };
+  var DIRS = ['북','북동','동','남동','남','남서','서','북서'];
+
+  var $ = function(id){ return document.getElementById(id); };
+  var select = $('wx-city'), stage = $('wx-stage'), controller = null, loadedOnce = false;
+
+  CITIES.forEach(function(c, i){
+    var o = document.createElement('option'); o.value = i; o.textContent = c.name; select.appendChild(o);
+  });
+
+  function el(tag, cls, text){
+    var e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(text !== undefined) e.textContent = text;
+    return e;
+  }
+  function showLoading(name){
+    stage.textContent = '';
+    var box = el('div', 'wx-loading');
+    box.appendChild(el('span', 'wx-spin'));
+    box.appendChild(el('span', '', name + ' 날씨를 불러오는 중…'));
+    stage.appendChild(box);
+  }
+  function showError(title, detail, city){
+    stage.textContent = '';
+    var box = el('div', 'wx-error'); box.setAttribute('role', 'alert');
+    box.appendChild(el('b', '', title));
+    box.appendChild(el('p', '', detail));
+    var btn = el('button', 'wx-retry', '다시 시도'); btn.type = 'button';
+    btn.addEventListener('click', function(){ load(city); });
+    box.appendChild(btn);
+    stage.appendChild(box);
+  }
+  function stat(k, v, unit){
+    var s = el('div', 'wx-stat');
+    s.appendChild(el('div', 'k', k));
+    var vv = el('div', 'v', v);
+    if(unit) vv.appendChild(el('small', '', unit));
+    s.appendChild(vv);
+    return s;
+  }
+  function showWeather(city, cw, units){
+    var w = WMO[cw.weathercode] || ['날씨 정보', '🌡', '🌡'];
+    var card = el('div', 'wx-card');
+    var top = el('div', 'wx-top'), left = el('div');
+    left.appendChild(el('div', 'wx-city', city.name));
+    left.appendChild(el('div', 'wx-desc', w[0]));
+    top.appendChild(left);
+    top.appendChild(el('div', 'wx-icon', cw.is_day === 0 ? w[2] : w[1]));
+    card.appendChild(top);
+    var t = el('div', 'wx-temp', String(Math.round(cw.temperature * 10) / 10));
+    t.appendChild(el('small', '', units.temperature || '°C'));
+    card.appendChild(t);
+    var g = el('div', 'wx-grid');
+    g.appendChild(stat('풍속', String(cw.windspeed), units.windspeed || 'km/h'));
+    var has = typeof cw.winddirection === 'number';
+    g.appendChild(stat('풍향', has ? DIRS[Math.round(cw.winddirection / 45) % 8] + '풍' : '-', has ? Math.round(cw.winddirection) + '°' : ''));
+    card.appendChild(g);
+    if(cw.time) card.appendChild(el('div', 'wx-time', '관측 시각 ' + String(cw.time).replace('T', ' ') + ' (한국 시간)'));
+    stage.textContent = '';
+    stage.appendChild(card);
+  }
+
+  async function load(city){
+    if(controller) controller.abort();
+    controller = new AbortController();
+    var timedOut = false;
+    var timer = setTimeout(function(){ timedOut = true; controller.abort(); }, 15000);
+    showLoading(city.name);
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + city.lat +
+              '&longitude=' + city.lon + '&current_weather=true&timezone=Asia%2FSeoul';
+    try{
+      var res = await fetch(url, {signal: controller.signal});
+      if(!res.ok){
+        var msg = '';
+        try{ var j = await res.json(); msg = j && j.reason ? j.reason : ''; }catch(e){}
+        showError('날씨 서버가 오류를 돌려줬어요. (' + res.status + ')', msg || '잠시 뒤 다시 시도해 주세요.', city);
+        return;
+      }
+      var data = await res.json();
+      var cw = data && data.current_weather;
+      if(!cw || typeof cw.temperature !== 'number' || typeof cw.windspeed !== 'number'){
+        showError('받은 데이터를 읽을 수 없어요.', '현재 날씨 값이 응답에 없어요. 잠시 뒤 다시 시도해 주세요.', city);
+        return;
+      }
+      showWeather(city, cw, data.current_weather_units || {});
+    }catch(err){
+      if(err && err.name === 'AbortError'){
+        if(timedOut) showError('응답이 너무 오래 걸려요.', '15초 안에 답이 오지 않았어요. 인터넷 연결을 확인해 주세요.', city);
+      } else {
+        showError('네트워크 오류예요.', '인터넷 연결을 확인해 주세요. (' + (err && err.message ? err.message : err) + ')', city);
+      }
+    }finally{
+      clearTimeout(timer);
+    }
+  }
+
+  select.addEventListener('change', function(){ load(CITIES[select.value]); });
+  // 접힌 칸을 처음 펼칠 때만 불러와요 (페이지를 열 때마다 외부 요청을 보내지 않도록)
+  $('weather-fold').addEventListener('toggle', function(){
+    if(this.open && !loadedOnce){ loadedOnce = true; load(CITIES[select.value]); }
   });
 })();
 </script>
