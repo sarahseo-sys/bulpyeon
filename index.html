@@ -148,6 +148,18 @@
   #contactForm .hp{position:absolute;left:-9999px;height:0;overflow:hidden}
   #contactForm .save:disabled{opacity:.6;cursor:default}
 
+  /* 날씨 아이콘 + 팝오버 */
+  .top-head{position:relative}
+  .top-head .hud, .top-head h1, .top-head .sub{padding-right:54px}
+  .wx-btn{position:absolute; top:0; right:0; width:44px; height:44px; font-size:22px; line-height:1; border:3px solid #fff; background:#000; cursor:pointer; padding:0; border-radius:0; box-shadow:3px 3px 0 var(--pink)}
+  .wx-btn:hover, .wx-btn[aria-expanded=true]{border-color:var(--yellow)}
+  .wx-btn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--pink)}
+  .wx-pop{position:absolute; top:52px; right:0; width:min(340px, calc(100vw - 32px)); z-index:20; background:var(--bg); border:3px solid #fff; padding:12px; box-shadow:6px 6px 0 #000}
+  .wx-pop[hidden]{display:none}
+  .wx-pop-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px}
+  .wx-pop-title{font-family:var(--px); font-size:14px; color:var(--yellow)}
+  .wx-x{font-family:var(--px); font-size:13px; border:2px solid var(--muted); background:none; color:var(--muted); width:30px; height:30px; padding:0; cursor:pointer; border-radius:0}
+  .wx-x:hover{border-color:var(--yellow); color:#fff}
   /* ===== 날씨 (현재 날씨) ===== */
   #weather select{width:100%; font-family:var(--tx); font-size:16px; padding:11px 36px 11px 12px; border:2px solid #5a52a8; background:#000; color:#fff; border-radius:0; -webkit-appearance:none; appearance:none; background-image:linear-gradient(45deg,transparent 50%,#fff 50%),linear-gradient(135deg,#fff 50%,transparent 50%); background-position:calc(100% - 17px) 50%,calc(100% - 12px) 50%; background-size:5px 5px; background-repeat:no-repeat}
   #weather select:focus{outline:none; border-color:var(--yellow)}
@@ -182,10 +194,22 @@
 <body>
 <main class="wrap">
 
-  <header>
+  <header class="top-head">
+    <button type="button" id="wx-btn" class="wx-btn" aria-label="날씨 보기" aria-expanded="false" aria-controls="weather" title="날씨 보기">⛅</button>
     <div class="hud">REORDER QUEST</div>
     <h1>이 집, 다시 시켜도 될까?</h1>
     <p class="sub">가게 이름을 치면 내가 남긴 전투 기록으로 위험도를 바로 보여줘요.</p>
+
+    <div id="weather" class="wx-pop" role="dialog" aria-label="현재 날씨" hidden>
+      <div class="wx-pop-head">
+        <span class="wx-pop-title">⛅ 현재 날씨</span>
+        <button type="button" id="wx-close" class="wx-x" aria-label="닫기">✕</button>
+      </div>
+      <label class="wx-lbl" for="wx-city">도시</label>
+      <select id="wx-city" aria-controls="wx-stage"></select>
+      <div class="wx-stage" id="wx-stage" aria-live="polite"></div>
+      <p class="wx-foot">데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · 공식 기상청 예보가 아니에요.</p>
+    </div>
   </header>
 
   <div id="party-nudge" hidden>
@@ -273,18 +297,6 @@
         </div>
         <input type="file" id="import-file" accept="application/json,.json" hidden>
       </div>
-    </details>
-  </section>
-
-  <section id="weather">
-    <details class="fold" id="weather-fold" style="margin-top:0">
-    <summary>⛅ 날씨 보기 (현재 기온·풍속)</summary>
-    <div class="body" style="padding-top:6px">
-      <label class="wx-lbl" for="wx-city">도시</label>
-      <select id="wx-city" aria-controls="wx-stage"></select>
-      <div class="wx-stage" id="wx-stage" aria-live="polite"></div>
-      <p class="wx-foot">데이터: <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · 키 없이 바로 불러와요. 공식 기상청 예보가 아니에요.</p>
-    </div>
     </details>
   </section>
 
@@ -1086,10 +1098,18 @@
   }
 
   select.addEventListener('change', function(){ load(CITIES[select.value]); });
-  // 접힌 칸을 처음 펼칠 때만 불러와요 (페이지를 열 때마다 외부 요청을 보내지 않도록)
-  $('weather-fold').addEventListener('toggle', function(){
-    if(this.open && !loadedOnce){ loadedOnce = true; load(CITIES[select.value]); }
-  });
+  // 아이콘을 처음 눌렀을 때만 불러와요 (페이지를 열 때마다 외부 요청을 보내지 않도록)
+  var pop = $('weather'), btn = $('wx-btn');
+  function setOpen(open){
+    pop.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if(open && !loadedOnce){ loadedOnce = true; load(CITIES[select.value]); }
+    if(open) select.focus({preventScroll:true}); else if(document.activeElement && pop.contains(document.activeElement)) btn.focus();
+  }
+  btn.addEventListener('click', function(e){ e.stopPropagation(); setOpen(pop.hidden); });
+  $('wx-close').addEventListener('click', function(){ setOpen(false); });
+  document.addEventListener('click', function(e){ if(!pop.hidden && !pop.contains(e.target) && e.target !== btn) setOpen(false); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && !pop.hidden) setOpen(false); });
 })();
 </script>
 </body>
