@@ -225,6 +225,7 @@
   #weather .wx-time{margin-top:10px; font-size:12.5px; color:var(--muted)}
   #weather .wx-error{border:2px solid var(--red); background:rgba(255,46,99,.12); color:#ffb3c4; padding:10px 12px; font-size:14px; word-break:break-word}
   #weather .wx-error b{display:block; color:var(--red); font-family:var(--px); font-size:13px; margin-bottom:2px}
+  #weather .wx-error + .wx-card{margin-top:10px}
   #weather .wx-error p{margin:0 0 10px}
   #weather button.wx-retry{font-family:var(--px); font-size:13px; padding:8px 12px; border:2px solid #fff; background:#000; color:#fff; cursor:pointer; border-radius:0}
   #weather button.wx-retry:hover{border-color:var(--yellow)}
@@ -1178,9 +1179,41 @@
   var $ = function(id){ return document.getElementById(id); };
   var select = $('wx-city'), stage = $('wx-stage'), controller = null, loadedOnce = false;
 
+  var canGeo = !!(navigator.geolocation);
+  if(canGeo){ var me = document.createElement('option'); me.value = 'me'; me.textContent = '📍 내 위치'; select.appendChild(me); }
   CITIES.forEach(function(c, i){
     var o = document.createElement('option'); o.value = i; o.textContent = c.name; select.appendChild(o);
   });
+  select.value = canGeo ? 'me' : '0';
+  var fallbackNote = '';
+
+  /* 내 위치: 브라우저가 위치를 허락받았을 때만 좌표를 받아요. 좌표는 저장하지 않고, 날씨를 받을 때 Open-Meteo에만 (소수 둘째 자리까지) 보내요 */
+  function locate(){
+    return new Promise(function(resolve, reject){
+      navigator.geolocation.getCurrentPosition(function(p){
+        resolve({name:'📍 내 위치', lat:Math.round(p.coords.latitude*100)/100, lon:Math.round(p.coords.longitude*100)/100});
+      }, reject, {enableHighAccuracy:false, timeout:10000, maximumAge:600000});
+    });
+  }
+  function geoReason(e){
+    if(e && e.code === 1) return '위치 권한이 꺼져 있어요';
+    if(e && e.code === 3) return '위치를 찾는 데 시간이 너무 걸렸어요';
+    return '위치를 알 수 없었어요';
+  }
+  async function loadSelected(){
+    var v = select.value;
+    if(v !== 'me'){ fallbackNote = ''; return load(CITIES[+v]); }
+    showLoading('내 위치');
+    try{
+      var city = await locate();
+      fallbackNote = '';
+      return load(city);
+    }catch(e){
+      select.value = '0';
+      fallbackNote = '⚠️ ' + geoReason(e) + '. 대신 서울 날씨를 보여줘요. 브라우저 주소창의 위치 권한을 허용하면 내 위치로 볼 수 있어요.';
+      return load(CITIES[0]);
+    }
+  }
 
   function el(tag, cls, text){
     var e = document.createElement(tag);
@@ -1201,7 +1234,7 @@
     box.appendChild(el('b', '', title));
     box.appendChild(el('p', '', detail));
     var btn = el('button', 'wx-retry', '다시 시도'); btn.type = 'button';
-    btn.addEventListener('click', function(){ load(city); });
+    btn.addEventListener('click', function(){ loadSelected(); });
     box.appendChild(btn);
     stage.appendChild(box);
   }
@@ -1232,6 +1265,7 @@
     card.appendChild(g);
     if(cw.time) card.appendChild(el('div', 'wx-time', '관측 시각 ' + String(cw.time).replace('T', ' ') + ' (한국 시간)'));
     stage.textContent = '';
+    if(fallbackNote) stage.appendChild(el('div', 'wx-error', fallbackNote));
     stage.appendChild(card);
   }
 
@@ -1269,13 +1303,13 @@
     }
   }
 
-  select.addEventListener('change', function(){ load(CITIES[select.value]); });
+  select.addEventListener('change', function(){ loadSelected(); });
   // 아이콘을 처음 눌렀을 때만 불러와요 (페이지를 열 때마다 외부 요청을 보내지 않도록)
   var pop = $('weather'), btn = $('wx-btn');
   function setOpen(open){
     pop.hidden = !open;
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if(open && !loadedOnce){ loadedOnce = true; load(CITIES[select.value]); }
+    if(open && !loadedOnce){ loadedOnce = true; loadSelected(); }
     if(open) select.focus({preventScroll:true}); else if(document.activeElement && pop.contains(document.activeElement)) btn.focus();
   }
   btn.addEventListener('click', function(e){ e.stopPropagation(); setOpen(pop.hidden); });
